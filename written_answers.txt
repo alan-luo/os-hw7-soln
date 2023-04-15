@@ -10,7 +10,10 @@ about 80 words.
 Observe and explain any difference in behavior when using farfetchd on the
 provided mmap target versus the malloc target.
 
-    /* TODO */
+Fetching the mmap'd region consistently reveals a full page of memory, whereas
+the same is not true for the malloc'd memory. This is because the mmap'd
+allocation is page-aligned (mapping at the beginning of the page), whereas there
+is no such guarantee for malloc'd memory.
 
 =================================== P1Q1 end ===================================
 
@@ -18,14 +21,21 @@ provided mmap target versus the malloc target.
 Observe and explain any difference in behavior when using farfetchd on the
 provided mmap target versus the fork target (in both the parent and child).
 
-    /* TODO */
+We are unable to write to the post-fork mapping in the parent or the child,
+whereas the normal mmap'd allocation is perfectly writable. This is because of
+copy-on-write (COW) semantics, which must ensure that forked memory is
+write-protected, as pages are shared by the parent/child process until the first
+write. If either the parent or the child had written to the memory in fork.c,
+this wouldn't be the case.
 
 =================================== P1Q2 end ===================================
 
 ================================== P1Q3 start ==================================
 Observe and explain the behavior of farfetchd on the strlit target.
 
-    /* TODO */
+We are unable to write to the string. This is because C string literals are
+stored in the read-only data section of memory (mapped to the executable file),
+and so they aren't writable.
 
 =================================== P1Q3 end ===================================
 
@@ -34,7 +44,11 @@ Try going through Session 2 without using setarch -R, which is used to disable
 ASLR for the process; that is, run the twecho target directly. Briefly describe
 what ASLR is, and explain how it affects finding the argv strings.
 
-    /* TODO */
+ASLR stands for "address space layout randomization"; it works to randomize
+where regions of memory are located in a process's virtual address space (for
+security through obscurity). This affects locating argv because it randomizes
+the location of the bottom of the stack on each execution, s.t. it is no longer
+always located at the end of the address space.
 
 =================================== P1Q4 end ===================================
 
@@ -43,6 +57,11 @@ Ensure that the behavior observed in Part 1 for the fork target is remedied;
 explain generally how the GUP logic handles this case. Feel free to reference
 line numbers in mm/gup.c.
 
-    /* TODO */
+It handles this case by invoking the page fault handler routine
+handle_mm_fault() to break COW, s.t. the parent and child end up with separate
+pages (one of which is a copy of the original) that are no longer
+write-protected. FOLL_COW is set subsequently to indicate the COW-break in cases
+where the mapping is read-only, but it's unnecessary here since the broken pages
+will no longer be write-protected (as the memory was mapped with PROT_WRITE).
 
 =================================== P2Q1 end ===================================

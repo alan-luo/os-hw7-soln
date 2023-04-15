@@ -1,3 +1,6 @@
+/*
+ * farfetch.c
+ */
 #include <linux/module.h>
 #include <linux/printk.h>
 #include <linux/slab.h>
@@ -5,19 +8,15 @@
 #include <linux/mm.h>
 #include <linux/sched/mm.h>
 #include <linux/highmem.h>
-#include <linux/farfetch.h>
 
-extern long (*farfetch_ptr)(unsigned int cmd, void __user *addr,
-			    pid_t target_pid, unsigned long target_addr,
-			    size_t len);
-extern long farfetch_default(unsigned int cmd, void __user *addr,
-			     pid_t target_pid, unsigned long target_addr,
-			     size_t len);
+enum {
+	FAR_READ,
+	FAR_WRITE,
+};
 
-long farfetch(unsigned int cmd, void __user *addr, pid_t target_pid,
-	      unsigned long target_addr, size_t len)
+static long farfetch(unsigned int cmd, void __user *addr, struct pid *pid_struct,
+	             unsigned long target_addr, size_t len)
 {
-	struct pid *pid_struct;
 	struct task_struct *tsk;
 	struct mm_struct *mm;
 	struct page **pages;
@@ -37,12 +36,9 @@ long farfetch(unsigned int cmd, void __user *addr, pid_t target_pid,
 	nr_pages = (page_off + len + PAGE_SIZE - 1) / PAGE_SIZE;
 	WARN_ON(nr_pages * PAGE_SIZE < len);
 
-	if (from_kuid_munged(current_user_ns(), task_euid(current)))
-		return -EPERM;
-
-	pid_struct = find_get_pid(target_pid);
+	if (!pid_struct)
+		return -ESRCH;
 	tsk = get_pid_task(pid_struct, PIDTYPE_PID);
-	put_pid(pid_struct);
 	if (!tsk)
 		return -ESRCH;
 
@@ -70,6 +66,7 @@ long farfetch(unsigned int cmd, void __user *addr, pid_t target_pid,
 	}
 	ret = get_user_pages_remote(mm, target_addr, nr_pages,
 				    (cmd == FAR_WRITE ? FOLL_WRITE : 0) | FOLL_FORCE,
+				    /* (cmd == FAR_WRITE ? 0 : 0) | FOLL_FORCE, */
 				    pages, NULL, &locked);
 	if (locked)
 		mmap_read_unlock(mm);
@@ -126,17 +123,80 @@ long farfetch(unsigned int cmd, void __user *addr, pid_t target_pid,
 	return ret ? ret : len;
 }
 
+static ssize_t dev_read(struct file *fp, char __user *buf, size_t n, loff_t *of)
+{
+	long ret = farfetch(FAR_READ, buf, fp->private_data, *of, n);
+	if (!(ret < 0))
+		*of += ret;
+	return ret;
+}
+
+static ssize_t dev_write(struct file *fp, const char __user *buf, size_t n,
+			 loff_t *of)
+{
+	long ret = farfetch(FAR_WRITE, (void __user *)buf, fp->private_data, *of, n);
+	if (!(ret < 0))
+		*of += ret;
+	return ret;
+}
+
+static int dev_open(struct inode *ino, struct file *fp)
+{
+	if (!try_module_get(THIS_MODULE))
+		return -ENXIO;
+	if (iminor(ino) != 0) {
+		fp->private_data = find_get_pid(iminor(ino));
+		if (fp->private_data == NULL)
+			return -ESRCH;
+	} else
+		fp->private_data = NULL;
+	return 0;
+}
+
+static int dev_release(struct inode *ino, struct file *fp)
+{
+	put_pid(fp->private_data);
+	module_put(THIS_MODULE);
+	return 0;
+}
+
+static long dev_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
+{
+	if (iminor(file_inode(fp)) != 0)
+		return -ENOTTY;
+	put_pid(fp->private_data);
+	fp->private_data = find_get_pid(arg);
+	if (fp->private_data == NULL)
+		return -ESRCH;
+	return 0;
+}
+
+static struct file_operations fops = {
+	.llseek = default_llseek,
+	.read = dev_read,
+	.write = dev_write,
+	.open = dev_open,
+	.release = dev_release,
+	.unlocked_ioctl = dev_ioctl,
+};
+
+static int major;
+
 int farfetch_init(void)
 {
 	pr_info("Installing farfetch\n");
-	farfetch_ptr = farfetch;
+	major = __register_chrdev(0, 0, MINORMASK + 1, "farfetch", &fops);
+	if (major < 0) {
+		pr_err("register_chrdev %d", major);
+		return major;	
+	}
 	return 0;
 }
 
 void farfetch_exit(void)
 {
 	pr_info("Removing farfetch\n");
-	farfetch_ptr = farfetch_default;
+	__unregister_chrdev(major, 0, MINORMASK + 1, "farfetch");
 }
 
 module_init(farfetch_init);

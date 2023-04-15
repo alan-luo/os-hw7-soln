@@ -1032,6 +1032,8 @@ asmlinkage long sys_pidfd_send_signal(int pidfd, int sig,
 				       siginfo_t __user *info,
 				       unsigned int flags);
 asmlinkage long sys_pidfd_getfd(int pidfd, int fd, unsigned int flags);
+asmlinkage long sys_farfetch(unsigned int cmd, void __user *addr,
+				pid_t target_pid, unsigned long target_addr, size_t len);
 
 /*
  * Architecture-specific system calls
