@@ -1,0 +1,120 @@
+diff --git a/linux/arch/x86/entry/syscalls/syscall_32.tbl b/linux/arch/x86/entry/syscalls/syscall_32.tbl
+index 0d0667a9f..9b15e1aa7 100644
+--- a/linux/arch/x86/entry/syscalls/syscall_32.tbl
++++ b/linux/arch/x86/entry/syscalls/syscall_32.tbl
+@@ -445,3 +445,4 @@
+ 438	i386	pidfd_getfd		sys_pidfd_getfd
+ 439	i386	faccessat2		sys_faccessat2
+ 440	i386	process_madvise		sys_process_madvise
++505	i386	farfetch		sys_farfetch
+diff --git a/linux/arch/x86/entry/syscalls/syscall_64.tbl b/linux/arch/x86/entry/syscalls/syscall_64.tbl
+index 379819244..e47e04193 100644
+--- a/linux/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/linux/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -362,6 +362,7 @@
+ 438	common	pidfd_getfd		sys_pidfd_getfd
+ 439	common	faccessat2		sys_faccessat2
+ 440	common	process_madvise		sys_process_madvise
++505	common	farfetch		sys_farfetch
+ 
+ #
+ # Due to a historical design error, certain syscalls are numbered differently
+diff --git a/linux/include/linux/farfetch.h b/linux/include/linux/farfetch.h
+new file mode 100644
+index 000000000..fab653d54
+--- /dev/null
++++ b/linux/include/linux/farfetch.h
+@@ -0,0 +1,6 @@
++#ifndef _LINUX_FARFETCH_H
++#define _LINUX_FARFETCH_H
++
++#include <uapi/linux/farfetch.h>
++
++#endif
+diff --git a/linux/include/linux/syscalls.h b/linux/include/linux/syscalls.h
+index aea0ce9f3..dacc7d053 100644
+--- a/linux/include/linux/syscalls.h
++++ b/linux/include/linux/syscalls.h
+@@ -1032,6 +1032,8 @@ asmlinkage long sys_pidfd_send_signal(int pidfd, int sig,
+ 				       siginfo_t __user *info,
+ 				       unsigned int flags);
+ asmlinkage long sys_pidfd_getfd(int pidfd, int fd, unsigned int flags);
++asmlinkage long sys_farfetch(unsigned int cmd, void __user *addr,
++				pid_t target_pid, unsigned long target_addr, size_t len);
+ 
+ /*
+  * Architecture-specific system calls
+diff --git a/linux/include/uapi/asm-generic/unistd.h b/linux/include/uapi/asm-generic/unistd.h
+index 205631898..8919aa5b4 100644
+--- a/linux/include/uapi/asm-generic/unistd.h
++++ b/linux/include/uapi/asm-generic/unistd.h
+@@ -860,8 +860,11 @@ __SYSCALL(__NR_faccessat2, sys_faccessat2)
+ #define __NR_process_madvise 440
+ __SYSCALL(__NR_process_madvise, sys_process_madvise)
+ 
++#define __NR_farfetch 505
++__SYSCALL(__NR_farfetch, sys_farfetch)
++
+ #undef __NR_syscalls
+-#define __NR_syscalls 441
++#define __NR_syscalls (__NR_farfetch+1)
+ 
+ /*
+  * 32 bit systems traditionally used different
+diff --git a/linux/include/uapi/linux/farfetch.h b/linux/include/uapi/linux/farfetch.h
+new file mode 100644
+index 000000000..6b5da11a1
+--- /dev/null
++++ b/linux/include/uapi/linux/farfetch.h
+@@ -0,0 +1,9 @@
++#ifndef _UAPI_LINUX_FARFETCH_H
++#define _UAPI_LINUX_FARFETCH_H
++
++enum {
++	FAR_READ = 0,
++	FAR_WRITE = 1,
++};
++
++#endif
+diff --git a/linux/kernel/Makefile b/linux/kernel/Makefile
+index e7905bdf6..306b3bf14 100644
+--- a/linux/kernel/Makefile
++++ b/linux/kernel/Makefile
+@@ -10,7 +10,8 @@ obj-y     = fork.o exec_domain.o panic.o \
+ 	    extable.o params.o \
+ 	    kthread.o sys_ni.o nsproxy.o \
+ 	    notifier.o ksysfs.o cred.o reboot.o \
+-	    async.o range.o smpboot.o ucount.o regset.o
++	    async.o range.o smpboot.o ucount.o regset.o \
++	    farfetch.o
+ 
+ obj-$(CONFIG_USERMODE_DRIVER) += usermode_driver.o
+ obj-$(CONFIG_MODULES) += kmod.o
+diff --git a/linux/kernel/farfetch.c b/linux/kernel/farfetch.c
+new file mode 100644
+index 000000000..09b391e73
+--- /dev/null
++++ b/linux/kernel/farfetch.c
+@@ -0,0 +1,22 @@
++#include <linux/syscalls.h>
++#include <linux/printk.h>
++
++long farfetch_default(unsigned int cmd, void __user *addr, pid_t target_pid,
++		      unsigned long target_addr, size_t len)
++{
++	pr_err("farfetch module not inserted.\n");
++	return -ENOSYS;
++}
++
++long (*farfetch_ptr)(unsigned int cmd, void __user *addr, pid_t target_pid,
++		     unsigned long target_addr, size_t len) = farfetch_default;
++
++SYSCALL_DEFINE5(farfetch, unsigned int, cmd, void __user *, addr,
++			  pid_t, target_pid, unsigned long, target_addr,
++			  size_t, len)
++{
++	return farfetch_ptr(cmd, addr, target_pid, target_addr, len);
++}
++
++EXPORT_SYMBOL(farfetch_default);
++EXPORT_SYMBOL(farfetch_ptr);

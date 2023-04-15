@@ -1,0 +1,48 @@
+Answers for parts  1 - 2
+Enter your answers in the designated locations. Do NOT remove lines that start
+with '=' signs. Removing these lines will break our grading scripts and will
+result in 0 points.
+
+Try to keep lines to a max of 80 chars long, and please limit your answers to
+about 80 words.
+
+================================== P1Q1 start ==================================
+Observe and explain any difference in behavior when using farfetchd on the
+provided mmap target versus the malloc target.
+
+    /* TODO */
+
+=================================== P1Q1 end ===================================
+
+================================== P1Q2 start ==================================
+Observe and explain any difference in behavior when using farfetchd on the
+provided mmap target versus the fork target (in both the parent and child).
+
+    /* TODO */
+
+=================================== P1Q2 end ===================================
+
+================================== P1Q3 start ==================================
+Observe and explain the behavior of farfetchd on the strlit target.
+
+    /* TODO */
+
+=================================== P1Q3 end ===================================
+
+================================== P1Q4 start ==================================
+Try going through Session 2 without using setarch -R, which is used to disable
+ASLR for the process; that is, run the twecho target directly. Briefly describe
+what ASLR is, and explain how it affects finding the argv strings.
+
+    /* TODO */
+
+=================================== P1Q4 end ===================================
+
+================================== P2Q1 start ==================================
+Ensure that the behavior observed in Part 1 for the fork target is remedied;
+explain generally how the GUP logic handles this case. Feel free to reference
+line numbers in mm/gup.c.
+
+    /* TODO */
+
+=================================== P2Q1 end ===================================
